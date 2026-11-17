@@ -1,0 +1,1158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>货币战争 S2 阵容优化器 · 精确求解</title>
+<style>
+:root{
+  --bg:#0b0d12; --panel:#141822; --panel2:#1a1f2b; --line:#262c3a;
+  --gold:#d4a24c; --gold-dim:#8a6a2f;
+  --purple:#8b7cf6; --blue:#60a5fa; --green:#4ade80; --red:#f87171;
+  --txt:#e8eaee; --dim:#8b93a3; --dim2:#5f6776;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-size:14px;line-height:1.6;
+  font-family:"PingFang SC","Microsoft YaHei","Segoe UI",system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;padding-bottom:48px}
+.wrap{max-width:1240px;margin:0 auto;padding:0 18px}
+header{border-bottom:1px solid var(--line);background:linear-gradient(180deg,#12151d,#0b0d12);
+  padding:20px 0 16px;margin-bottom:18px}
+.title{font-size:20px;font-weight:700;letter-spacing:.5px}
+.title span{color:var(--gold)}
+.sub{color:var(--dim);font-size:12.5px;margin-top:5px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media (max-width:960px){.layout{grid-template-columns:1fr}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+h2{font-size:15px;font-weight:600;margin-bottom:2px;display:flex;align-items:center;gap:8px}
+h2 .hint{font-size:12px;color:var(--dim);font-weight:400}
+.sec{font-size:13px;color:var(--gold);font-weight:600;margin:14px 0 8px;display:flex;align-items:center;gap:7px}
+.sec::before{content:"";width:3px;height:13px;background:var(--gold);border-radius:2px}
+.btn{padding:9px 18px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);
+  color:var(--txt);font-size:13.5px;cursor:pointer;font-family:inherit;transition:.15s}
+.btn:hover{border-color:var(--gold-dim);background:#1f2532}
+.btn.primary{background:linear-gradient(180deg,#d4a24c,#b8873a);border-color:#d4a24c;color:#1a1206;font-weight:600}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.spacer{flex:1}
+.mini{font-size:12px;color:var(--dim)}
+/* 羁绊进度 */
+.bonds{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+@media (max-width:620px){.bonds{grid-template-columns:1fr}}
+.bond{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+.bond.on{border-color:rgba(212,162,76,.5);background:rgba(212,162,76,.07)}
+.bond .bn{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600}
+.badge-no{font-size:10px;color:#ff9a9a;border:1px solid rgba(255,154,154,.35);border-radius:4px;padding:0 4px}
+.badge-yes{font-size:10px;color:#9fd3ff;border:1px solid rgba(96,165,250,.35);border-radius:4px;padding:0 4px}
+.tiers{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+.tier{font-size:11.5px;color:var(--dim);border:1px solid var(--line);border-radius:6px;
+  padding:2px 7px;cursor:pointer;user-select:none;transition:.12s}
+.tier:hover{border-color:var(--gold-dim);color:#c9d2e3}
+.tier.on{background:rgba(74,222,128,.16);border-color:rgba(74,222,128,.5);color:#8ef0b4}
+/* 结果 */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.kpi{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:9px 10px;text-align:center}
+.kpi b{display:block;font-size:20px;color:var(--gold);line-height:1.3}
+.kpi span{font-size:11px;color:var(--dim)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th,td{padding:6px 8px;text-align:left;border-bottom:1px solid rgba(255,255,255,.05)}
+th{color:var(--dim);font-weight:500;font-size:11.5px}
+td.front{color:#ffb0b0}
+td.back{color:#9fc4ff}
+td.bd{color:#6ee7a8}
+.empty{color:var(--dim2);text-align:center;padding:22px 0;font-size:13px}
+.note{font-size:12.5px;color:#b9c4d6;background:rgba(139,124,246,.08);border-left:3px solid var(--purple);
+  border-radius:6px;padding:9px 12px;margin-top:10px;line-height:1.7}
+.note b{color:#d9ccff}
+.warn{background:rgba(248,113,113,.08);border-left-color:var(--red)}
+.status{font-size:12px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
+.status.ok{color:#8ef0b4;border-color:rgba(74,222,128,.45);background:rgba(74,222,128,.1)}
+.status.warnb{color:#ffd08a;border-color:rgba(212,162,76,.45);background:rgba(212,162,76,.1)}
+#overlay{position:fixed;inset:0;background:rgba(6,8,12,.72);backdrop-filter:blur(3px);
+  display:none;align-items:center;justify-content:center;z-index:50}
+#overlay.on{display:flex}
+.spin{width:34px;height:34px;border:3px solid rgba(212,162,76,.25);border-top-color:var(--gold);
+  border-radius:50%;animation:sp 1s linear infinite;margin:0 auto 12px}
+@keyframes sp{to{transform:rotate(360deg)}}
+#ovtxt{color:#e8eaee;font-size:14px;text-align:center}
+label.chk{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:#c2cddf;cursor:pointer}
+input[type=checkbox]{accent-color:#d4a24c;width:15px;height:15px}
+select{background:var(--panel2);color:var(--txt);border:1px solid var(--line);border-radius:7px;
+  padding:6px 9px;font-family:inherit;font-size:13px}
+.mustbox{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.mustbox label{font-size:12px;border:1px solid var(--line);border-radius:6px;padding:3px 8px;cursor:pointer;color:var(--dim)}
+.mustbox label.on{border-color:rgba(212,162,76,.5);color:var(--gold);background:rgba(212,162,76,.1)}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <div class="title">货币战争 S2 · 入画奇航　<span>阵容优化器</span></div>
+  <div class="sub">13 人（前 4 后 9）· 每人 ≤3 星徽 · 星徽只补角色没有的羁绊 · 命定主角 / 饮月天赋自动判断</div>
+</div></header>
+
+<div class="wrap">
+<div class="layout">
+  <!-- 左：录入 -->
+  <div>
+    <div class="card">
+      <h2>1 · 勾选已经拿到的档位 <span class="hint">对着游戏里的羁绊链路点</span></h2>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" id="btnNone">全部清空</button>
+        <button class="btn" id="btnAll">全部勾满</button>
+        <span class="spacer"></span>
+        <span class="mini" id="progTxt">0 / 67 档</span>
+      </div>
+      <div class="bonds" id="bondList" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card">
+      <h2>2 · 这一局的条件</h2>
+      <div class="sec">阿哈</div>
+      <div class="row">
+        <select id="selAha">
+          <option value="1">上阿哈（欢愉 / 幻月游戏直接满级）</option>
+          <option value="0">不上阿哈</option>
+        </select>
+      </div>
+      <div class="sec">主角光环</div>
+      <div class="row">
+        <label class="chk"><input type="checkbox" id="cbDm" checked> 命定主角（某角色羁绊 +2）</label>
+        <span class="mini">饮月天赋由求解器自己判断是否生效</span>
+      </div>
+      <div class="sec">目标</div>
+      <div class="row">
+        <select id="selMode">
+          <option value="1">1 · 最大化本局新增档位</option>
+          <option value="2">2 · 优先完成指定羁绊（不想再单独打的）</option>
+        </select>
+      </div>
+      <div id="mustWrap" style="display:none">
+        <div class="mustbox" id="mustList"></div>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn primary" id="btnRun">开始求解</button>
+        <span class="mini" id="runHint">精确求解（分支定界 + 局部搜索），通常几秒内出结果</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 右：结果 -->
+  <div>
+    <div class="card">
+      <h2>最优阵容 <span class="spacer"></span><span class="status" id="stStatus">待求解</span></h2>
+      <div class="kpis">
+        <div class="kpi"><b id="kNew">—</b><span>本局新增档位</span></div>
+        <div class="kpi"><b id="kStar">—</b><span>星琼</span></div>
+        <div class="kpi"><b id="kTotal">—</b><span>累计档位</span></div>
+        <div class="kpi"><b id="kLink">—</b><span>人均原生羁绊</span></div>
+      </div>
+      <div id="squadBox"><div class="empty">左侧勾好进度，点「开始求解」</div></div>
+      <div id="noteBox"></div>
+    </div>
+
+    <div class="card">
+      <h2>本局新完成</h2>
+      <div id="newBox"><div class="empty">—</div></div>
+    </div>
+
+    <div class="card">
+      <h2>还差一点</h2>
+      <div id="missBox"><div class="empty">—</div></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div id="overlay"><div><div class="spin"></div><div id="ovtxt">正在求解…</div></div></div>
+
+<script>
+var DATA = {"ahaName": "星神★阿哈", "ahaBonds": ["欢愉", "幻月游戏"], "yyName": "丹恒•饮月", "yyBonds": ["召唤", "连击", "治疗", "反击"], "chars": [{"n": "星神★阿哈", "p": "前台", "c": "4/5/7", "b": ["欢愉"], "indep": ["幻乐之主"]}, {"n": "丹恒•饮月", "p": "前台", "c": "5", "b": ["开拓银轨", "云上五骁"], "indep": ["双龙吟"]}, {"n": "丹恒•腾荒", "p": "后台", "c": "5", "b": [], "indep": ["双龙吟"]}, {"n": "克拉拉", "p": "前后台", "c": "5", "b": ["星间旅人", "反击"], "indep": ["机心巧匠"]}, {"n": "雪衣", "p": "前台", "c": "5", "b": ["仙舟舰队", "击破"], "indep": []}, {"n": "帕姆王", "p": "后台", "c": "5", "b": ["开拓银轨"], "indep": []}, {"n": "不死途", "p": "后台", "c": "5", "b": ["幻月游戏", "追击"], "indep": ["巡海游侠"]}, {"n": "卡芙卡", "p": "前台", "c": "5", "b": ["星核猎手", "持续伤害"], "indep": []}, {"n": "白厄", "p": "前后台", "c": "5", "b": ["黄金大饭店"], "indep": ["盗火行者"]}, {"n": "翡翠", "p": "后台", "c": "5", "b": ["千星商会", "群攻"], "indep": ["黑市主理人"]}, {"n": "阿格莱雅", "p": "前台", "c": "5", "b": ["奇兽花园", "连击"], "indep": []}, {"n": "希露瓦", "p": "前台", "c": "4", "b": ["少女乐队", "持续伤害"], "indep": []}, {"n": "寒鸦", "p": "后台", "c": "4", "b": ["仙舟舰队", "连击"], "indep": []}, {"n": "砂金•戏浪", "p": "前台", "c": "4", "b": ["千星商会", "欢愉"], "indep": []}, {"n": "千冶•刃", "p": "前后台", "c": "4", "b": ["幻月游戏", "星核猎手", "群攻"], "indep": []}, {"n": "姬子•启行", "p": "前台", "c": "4", "b": ["开拓银轨", "能量"], "indep": ["领航员"]}, {"n": "缇宝", "p": "前后台", "c": "4", "b": ["小小巨人", "追击"], "indep": []}, {"n": "昔涟", "p": "前台", "c": "4", "b": ["黄金大饭店", "召唤"], "indep": []}, {"n": "藿藿", "p": "后台", "c": "4", "b": ["小小巨人", "能量", "治疗"], "indep": []}, {"n": "风堇", "p": "前后台", "c": "4", "b": ["奇兽花园", "召唤", "治疗"], "indep": []}, {"n": "砂金", "p": "前后台", "c": "4", "b": ["星间旅人", "追击", "守护"], "indep": []}, {"n": "黄泉", "p": "前台", "c": "4", "b": ["梦境交织", "群攻"], "indep": []}, {"n": "刃", "p": "前后台", "c": "4", "b": ["云上五骁", "反击"], "indep": []}, {"n": "开拓者•欢愉", "p": "前后台", "c": "3", "b": ["开拓银轨", "星核猎手", "能量"], "indep": []}, {"n": "银狼LV.999", "p": "前台", "c": "3", "b": ["幻月游戏", "星核猎手", "欢愉"], "indep": []}, {"n": "大丽花", "p": "前后台", "c": "3", "b": ["梦境交织", "击破"], "indep": []}, {"n": "爻光", "p": "后台", "c": "3", "b": ["千星商会", "欢愉"], "indep": []}, {"n": "遐蝶", "p": "前后台", "c": "3", "b": ["黄金大饭店", "召唤"], "indep": []}, {"n": "符玄", "p": "后台", "c": "3", "b": ["小小巨人", "反击", "守护"], "indep": []}, {"n": "乱破", "p": "后台", "c": "3", "b": ["少女乐队", "击破"], "indep": []}, {"n": "镜流", "p": "前后台", "c": "3", "b": ["云上五骁", "连击"], "indep": []}, {"n": "椒丘", "p": "前台", "c": "3", "b": ["仙舟舰队", "持续伤害"], "indep": []}, {"n": "飞霄", "p": "前台", "c": "3", "b": ["仙舟舰队", "追击"], "indep": []}, {"n": "赛飞儿", "p": "后台", "c": "3", "b": ["奇兽花园", "群攻"], "indep": []}, {"n": "罗刹", "p": "前后台", "c": "3", "b": ["星间旅人", "治疗"], "indep": []}, {"n": "万敌", "p": "前后台", "c": "2", "b": ["奇兽花园", "黄金大饭店", "反击"], "indep": []}, {"n": "云璃", "p": "前后台", "c": "2", "b": ["仙舟舰队", "反击"], "indep": []}, {"n": "大黑塔", "p": "前台", "c": "2", "b": ["星间旅人", "群攻"], "indep": []}, {"n": "娜塔莎", "p": "后台", "c": "2", "b": ["星间旅人", "持续伤害", "治疗"], "indep": []}, {"n": "星期日", "p": "前后台", "c": "2", "b": ["幻月游戏", "开拓银轨", "连击"], "indep": []}, {"n": "流萤", "p": "前台", "c": "2", "b": ["星核猎手", "击破"], "indep": []}, {"n": "海瑟音", "p": "前后台", "c": "2", "b": ["奇兽花园", "持续伤害"], "indep": []}, {"n": "白露", "p": "后台", "c": "2", "b": ["云上五骁", "连击", "治疗"], "indep": []}, {"n": "知更鸟", "p": "前台", "c": "2", "b": ["少女乐队", "追击"], "indep": []}, {"n": "知更鸟•晴歌", "p": "前后台", "c": "2", "b": ["千星商会", "召唤", "能量"], "indep": []}, {"n": "绯英", "p": "前后台", "c": "2", "b": ["幻月游戏", "能量"], "indep": []}, {"n": "花火", "p": "前台", "c": "2", "b": ["小小巨人", "梦境交织", "欢愉"], "indep": []}, {"n": "三月七•巡猎", "p": "后台", "c": "1", "b": ["开拓银轨", "追击"], "indep": []}, {"n": "刻律德菈", "p": "后台", "c": "1", "b": ["小小巨人", "连击"], "indep": []}, {"n": "忘归人", "p": "前后台", "c": "1", "b": ["星间旅人", "击破"], "indep": []}, {"n": "托帕&账账", "p": "前后台", "c": "1", "b": ["千星商会", "追击"], "indep": []}, {"n": "景元", "p": "前后台", "c": "1", "b": ["云上五骁", "召唤"], "indep": []}, {"n": "桂乃芬", "p": "前后台", "c": "1", "b": ["仙舟舰队", "持续伤害"], "indep": []}, {"n": "波提欧", "p": "前台", "c": "1", "b": ["星间旅人", "击破"], "indep": []}, {"n": "火花", "p": "前后台", "c": "1", "b": ["幻月游戏", "少女乐队", "欢愉"], "indep": []}, {"n": "灵砂", "p": "前后台", "c": "1", "b": ["仙舟舰队", "群攻", "治疗"], "indep": []}, {"n": "瓦尔特", "p": "前后台", "c": "1", "b": ["开拓银轨", "群攻"], "indep": []}, {"n": "真珠", "p": "后台", "c": "1", "b": ["幻月游戏", "千星商会", "守护"], "indep": []}, {"n": "那刻夏", "p": "前台", "c": "1", "b": ["奇兽花园", "连击"], "indep": []}, {"n": "长夜月", "p": "前后台", "c": "1", "b": ["奇兽花园", "梦境交织", "召唤"], "indep": []}, {"n": "黑天鹅", "p": "后台", "c": "1", "b": ["梦境交织", "持续伤害"], "indep": []}], "bonds": {"云上五骁": {"need": [3, 5, 5], "badge": 0}, "少女乐队": {"need": [4, 4], "badge": 0}, "幻月游戏": {"need": [5, 7, 7], "badge": 1}, "奇兽花园": {"need": [5, 7, 7], "badge": 1}, "仙舟舰队": {"need": [4, 6, 6], "badge": 1}, "开拓银轨": {"need": [4, 6, 6], "badge": 1}, "千星商会": {"need": [2, 4, 4], "badge": 1}, "星核猎手": {"need": [3, 5, 5], "badge": 1}, "黄金大饭店": {"need": [3, 4, 4], "badge": 1}, "梦境交织": {"need": [2, 4, 4], "badge": 1}, "星间旅人": {"need": [4, 6, 6], "badge": 1}, "小小巨人": {"need": [3, 5, 5], "badge": 1}, "追击": {"need": [5, 7, 7], "badge": 1}, "持续伤害": {"need": [5, 7, 7], "badge": 1}, "击破": {"need": [4, 6, 6], "badge": 1}, "连击": {"need": [4, 6, 6], "badge": 1}, "群攻": {"need": [4, 6, 6], "badge": 1}, "欢愉": {"need": [5, 6, 6], "badge": 1}, "反击": {"need": [2, 4, 4], "badge": 1}, "召唤": {"need": [2, 4, 4], "badge": 1}, "能量": {"need": [2, 4, 4], "badge": 1}, "治疗": {"need": [4, 6, 6], "badge": 1}, "守护": {"need": [3, 3], "badge": 0}}};
+</script>
+<script>
+/* 货币战争 S2「入画奇航」阵容优化器 —— 精确求解器（分支定界 / JS 版）
+ *
+ * 与 Python + OR-Tools CP-SAT 版同模型、同目标：
+ *   · 13 人阵容；每人 ≤3 星徽；星徽只补「角色没有的 + 该羁绊有星徽」
+ *   · 阿哈上场：欢愉 / 幻月游戏计数 +13（判定用），展示记满级
+ *   · 命定主角：一名上场角色，其原生（有星徽的）羁绊共 +2 计数
+ *   · 饮月天赋：丹恒·饮月上场（前台）时，从 召唤/连击/治疗/反击 选 1 个加入自身
+ *   · 目标：1000 × 新完成档位（must 软约束 21000）+ 400 × 光环辐射 + 1 × 原生链路数
+ *
+ * 算法：按「羁绊组合」把角色去重成类型 → 分支定界枚举阵容；
+ *       上界 = 「星徽 39 + 未来原生 3r + 天赋点」背包松弛；
+ *       叶子 = 星徽背包 DP 精确求值，命定主角 / 饮月天赋做候选枚举；
+ *       星徽落地用最大流匹配（保证「每羁绊人数 ≤ 非原生成员数」「每人 ≤3 枚」同时满足）。
+ */
+(function (root, factory) {
+  if (typeof module !== "undefined" && module.exports) module.exports = factory();
+  else root.ExactSolver = factory();
+})(typeof self !== "undefined" ? self : this, function () {
+  "use strict";
+
+  var NEG = -1e9;
+
+  function createSolver(DATA, perfNow) {
+    var now = perfNow || (typeof performance !== "undefined" && performance.now
+      ? function () { return performance.now(); }
+      : function () { return Date.now(); });
+
+    /* ---------------- 静态数据 ---------------- */
+    var BOND_KEYS = Object.keys(DATA.bonds);
+    var NB = BOND_KEYS.length;
+    var BI = {};
+    for (var i = 0; i < NB; i++) BI[BOND_KEYS[i]] = i;
+
+    var NEED = [], BADGE = new Int8Array(NB);
+    for (i = 0; i < NB; i++) {
+      NEED.push(DATA.bonds[BOND_KEYS[i]].need.slice());
+      BADGE[i] = DATA.bonds[BOND_KEYS[i]].badge ? 1 : 0;
+    }
+
+    var CHARS = DATA.chars, NC = CHARS.length;
+    var CB = [];
+    for (i = 0; i < NC; i++) {
+      var arr = [];
+      (CHARS[i].b || []).forEach(function (bn) {
+        if (BI[bn] !== undefined) arr.push(BI[bn]);
+      });
+      CB.push(arr);
+    }
+    var AHA_I = -1, YY_I = -1;
+    for (i = 0; i < NC; i++) {
+      if (CHARS[i].n === DATA.ahaName) AHA_I = i;
+      if (CHARS[i].n === DATA.yyName) YY_I = i;
+    }
+    var AHA_BSET = new Int8Array(NB), YY_TSET = new Int8Array(NB), YY_BIDX = [];
+    (DATA.ahaBonds || []).forEach(function (bn) { if (BI[bn] !== undefined) AHA_BSET[BI[bn]] = 1; });
+    (DATA.yyBonds || []).forEach(function (bn) {
+      if (BI[bn] !== undefined && BADGE[BI[bn]]) { YY_TSET[BI[bn]] = 1; YY_BIDX.push(BI[bn]); }
+    });
+
+    /* 角色 → 类型 */
+    var typeMap = {}, typeOfChar = new Int16Array(NC), TYPES = [];
+    for (i = 0; i < NC; i++) {
+      var key = CB[i].slice().sort(function (a, b) { return a - b; }).join(",");
+      var t = typeMap[key];
+      if (!t) {
+        t = { bonds: CB[i].slice().sort(function (a, b) { return a - b; }),
+              linkN: CB[i].length, members: [], id: TYPES.length, badgeBonds: [] };
+        CB[i].forEach(function (b) { if (BADGE[b]) t.badgeBonds.push(b); });
+        typeMap[key] = t;
+        TYPES.push(t);
+      }
+      t.members.push(i);
+      typeOfChar[i] = t.id;
+    }
+    TYPES.forEach(function (t) { t.avail = t.members.length; });
+
+    /* ---------------- 求解 ---------------- */
+    function solve(opts) {
+      opts = opts || {};
+      var t0 = now();
+      var done = opts.done || new Set();
+      var useAha = !!opts.useAha;
+      var must = opts.must || new Set();
+      var soft = !!opts.soft;
+      var auraHard = !!opts.auraHard;
+      var dingming = !!opts.dingming;
+      var yyOn = opts.yyTalent !== false;
+      var timeMs = opts.timeLimitMs || 20000;
+      var BUD = 39;
+
+      /* --- 权重 --- */
+      var w = new Int32Array(NB * 4), pw = new Int32Array(NB * 4);
+      var aha13 = new Int8Array(NB), mustMin = new Int8Array(NB), anyW = new Int8Array(NB);
+      for (var b = 0; b < NB; b++) {
+        var L = NEED[b].length, sum = 0;
+        for (var k = 0; k < L; k++) {
+          var wv = 0;
+          if (!done.has(BOND_KEYS[b] + "|" + k)) {
+            wv = 1000;
+            if (soft && must.has(BOND_KEYS[b])) wv += 20000;
+          }
+          w[b * 4 + k] = wv; sum += wv;
+          pw[b * 4 + k + 1] = sum;
+          if (wv > 0 && !soft && must.has(BOND_KEYS[b])) mustMin[b] = k + 1;
+        }
+        anyW[b] = sum > 0 ? 1 : 0;
+        if (useAha && AHA_BSET[b]) aha13[b] = 13;
+      }
+
+      /* --- 类型排序 --- */
+      var order = TYPES.map(function (t) {
+        var s = t.linkN * 0.6;
+        t.bonds.forEach(function (bb) {
+          var L2 = NEED[bb].length;
+          for (var k2 = 0; k2 < L2; k2++)
+            if (w[bb * 4 + k2] > 0) s += w[bb * 4 + k2] / NEED[bb][k2];
+        });
+        return { id: t.id, s: s };
+      });
+      order.sort(function (a, b) { return b.s - a.s; });
+      var O = order.map(function (o) { return o.id; });
+
+      var ahaType = (useAha && AHA_I >= 0) ? typeOfChar[AHA_I] : -1;
+      if (ahaType >= 0) {
+        for (i = 0; i < O.length; i++) if (O[i] === ahaType) { O.splice(0, 0, O.splice(i, 1)[0]); break; }
+      }
+      var NT = O.length;
+      var yyType = (yyOn && YY_I >= 0) ? typeOfChar[YY_I] : -1;
+
+      /* --- 后缀统计 --- */
+      var suffixPool = [], suffixLink = new Int32Array(NT + 1), suffixAvail = new Int32Array(NT + 1);
+      for (i = NT - 1; i >= 0; i--) {
+        var pool = i + 1 < NT ? suffixPool[i + 1].slice() : new Int16Array(NB);
+        var tt = TYPES[O[i]];
+        tt.bonds.forEach(function (bb) { pool[bb] += tt.avail; });
+        suffixPool[i] = pool;
+        suffixLink[i] = suffixLink[i + 1] + tt.avail * tt.linkN;
+        suffixAvail[i] = suffixAvail[i + 1] + tt.avail;
+      }
+
+      /* --- 工作区 --- */
+      var n = new Int16Array(NB);
+      var taken = new Int16Array(NT);
+      var stack = new Int16Array(13);
+      var sp = 0;
+      var best = NEG, bestState = null, nodes = 0, aborted = false, leaves = 0, knaps = 0;
+
+      var CAPMAX = 128;
+      var dpA = new Int32Array(CAPMAX), dpB = new Int32Array(CAPMAX);
+      var costB = new Int32Array(NB * 4), valB = new Int32Array(NB * 4),
+          levB = new Int8Array(NB * 4), nLev = new Int8Array(NB);
+      var bonusArr = new Int16Array(NB);
+      var trace = new Int8Array(NB * (BUD + 8));
+      var abBase = new Int16Array(NB), lvBase = new Int8Array(NB);
+
+      /* --- 背包：预算 bud 内选档位，返回最大分 --- */
+      function knap(bud, bonus, wantTrace) {
+        knaps++;
+        dpA[0] = 0;
+        for (var u = 1; u <= bud; u++) dpA[u] = NEG;
+        for (var b = 0; b < NB; b++) {
+          var L = NEED[b].length, mm = mustMin[b];
+          nLev[b] = 0;
+          if (!anyW[b] && mm === 0) continue;
+          var base = n[b] + aha13[b] + (bonus ? bonus[b] : 0);
+          var cap = 13 - n[b] - (bonus ? bonus[b] : 0);
+          var cnt = 0;
+          for (var l = mm; l <= L; l++) {
+            var c = l === 0 ? 0 : NEED[b][l - 1] - base;
+            if (c < 0) c = 0;
+            if (c > 0 && (!BADGE[b] || c > cap)) continue;
+            var v = pw[b * 4 + l];
+            if (cnt > 0 && v <= valB[b * 4 + cnt - 1]) continue;
+            costB[b * 4 + cnt] = c; valB[b * 4 + cnt] = v; levB[b * 4 + cnt] = l;
+            cnt++;
+          }
+          if (mm > 0 && cnt === 0) return { v: NEG, u: 0 };
+          nLev[b] = cnt;
+        }
+        for (b = 0; b < NB; b++) {
+          var cn = nLev[b];
+          if (!cn) continue;
+          for (u = 0; u <= bud; u++) dpB[u] = NEG;
+          var tb = wantTrace ? b * (BUD + 8) : 0;
+          for (u = 0; u <= bud; u++) {
+            var cur = dpA[u];
+            if (cur <= NEG) continue;
+            for (var j = 0; j < cn; j++) {
+              var u2 = u + costB[b * 4 + j];
+              if (u2 > bud) continue;
+              var nv = cur + valB[b * 4 + j];
+              if (nv > dpB[u2]) { dpB[u2] = nv; if (wantTrace) trace[tb + u2] = j + 1; }
+            }
+          }
+          var tmp = dpA; dpA = dpB; dpB = tmp;
+        }
+        var bv = NEG, bu = 0;
+        for (u = 0; u <= bud; u++) if (dpA[u] > bv) { bv = dpA[u]; bu = u; }
+        return { v: bv, u: bu };
+      }
+
+      function backtrace(res) {
+        var u = res.u;
+        for (var b = NB - 1; b >= 0; b--) {
+          var cn = nLev[b];
+          if (!cn) { lvBase[b] = 0; abBase[b] = 0; continue; }
+          var j = trace[b * (BUD + 8) + u] - 1;
+          if (j < 0) { lvBase[b] = 0; abBase[b] = 0; continue; }
+          lvBase[b] = levB[b * 4 + j];
+          abBase[b] = costB[b * 4 + j];
+          u -= abBase[b];
+          if (u < 0) u = 0;
+        }
+      }
+
+      /* --- 上界 --- */
+      function bound(tIdx, r, linkSum) {
+        var units = BUD + 3 * r + (dingming ? 2 : 0) + (yyType >= 0 ? 1 : 0);
+        if (units > CAPMAX - 1) units = CAPMAX - 1;
+        dpA[0] = 0;
+        for (var u = 1; u <= units; u++) dpA[u] = NEG;
+        for (var b = 0; b < NB; b++) {
+          var L = NEED[b].length, mm = mustMin[b];
+          nLev[b] = 0;
+          if (!anyW[b] && mm === 0) continue;
+          var poolF = Math.min(r, suffixPool[tIdx][b]);
+          // 命定/天赋点总量只有 3 点，不能给每个羁绊都减（否则上界虚高）
+          var base = n[b] + aha13[b];
+          var cap = 13 - n[b] + poolF;
+          var cnt = 0;
+          for (var l = mm; l <= L; l++) {
+            var c = l === 0 ? 0 : NEED[b][l - 1] - base;
+            if (c < 0) c = 0;
+            // 无星徽羁绊只能靠原生补（未来最多还能来 poolF 个原生）
+            var maxCost = BADGE[b] ? cap : poolF;
+            if (c > maxCost) continue;
+            var v = pw[b * 4 + l];
+            if (cnt > 0 && v <= valB[b * 4 + cnt - 1]) continue;
+            costB[b * 4 + cnt] = c; valB[b * 4 + cnt] = v; levB[b * 4 + cnt] = l;
+            cnt++;
+          }
+          if (mm > 0 && cnt === 0) return NEG;
+          nLev[b] = cnt;
+        }
+        for (b = 0; b < NB; b++) {
+          var cn = nLev[b];
+          if (!cn) continue;
+          for (u = 0; u <= units; u++) dpB[u] = NEG;
+          for (u = 0; u <= units; u++) {
+            var cur = dpA[u];
+            if (cur <= NEG) continue;
+            for (var j = 0; j < cn; j++) {
+              var u2 = u + costB[b * 4 + j];
+              if (u2 > units) continue;
+              var nv = cur + valB[b * 4 + j];
+              if (nv > dpB[u2]) dpB[u2] = nv;
+            }
+          }
+          var tmp = dpA; dpA = dpB; dpB = tmp;
+        }
+        var bv = NEG;
+        for (u = 0; u <= units; u++) if (dpA[u] > bv) bv = dpA[u];
+        if (bv <= NEG) return NEG;
+        return bv + linkSum + Math.min(3 * r, suffixLink[tIdx]) + (auraHard ? 400 : 0);
+      }
+
+      /* --- 叶子 --- */
+      function squadHasType(tid) {
+        for (var s = 0; s < sp; s++) if (TYPES[O[stack[s]]].id === tid) return true;
+        return false;
+      }
+
+      function considerLeaf(linkSum, valNoBonus, allocAb, allocLv, bonus, tal, dmType, dmCounts) {
+        var value = valNoBonus + linkSum + (auraHard ? 400 : 0);
+        if (value <= best) return;
+        best = value;
+        bestState = {
+          stack: Array.prototype.slice.call(stack, 0, sp),
+          n: n.slice(), linkSum: linkSum, value: valNoBonus,
+          ab: allocAb, lv: allocLv,
+          bonus: bonus, tal: tal, dm: dmType >= 0 ? { typeId: dmType, counts: dmCounts } : null
+        };
+      }
+
+      function evalLeaf(linkSum, force) {
+        leaves++;
+        var hasYY = yyType >= 0 && squadHasType(yyType);
+        var extra = (dingming ? 2 : 0) + (hasYY ? 1 : 0);
+        var auraV = auraHard ? 400 : 0;
+
+        bonusArr.fill(0);
+        var base = knap(BUD, null, true);
+        if (base.v <= NEG) return NEG;
+        backtrace(base);
+        if (!force && base.v + extra * 1000 + linkSum + auraV <= best) return NEG;   // 天赋点最多换 extra 档
+
+        var bestV = base.v, bestBonus = null, bestTal = -1;
+        var bestAb = abBase.slice(), bestLv = lvBase.slice();
+        var bestDmType = -1, bestDmCounts = null;
+
+        if (extra > 0) {
+          // 饮月在场时天赋必须选一个：先用一个“保底”羁绊应用，保证计数与 Python 一致
+          if (hasYY && YY_BIDX.length) {
+            var fb = YY_BIDX[0];
+            bonusArr.fill(0); bonusArr[fb] += 1;
+            var rb = knap(BUD, bonusArr, true);
+            if (rb.v >= bestV) {
+              bestV = rb.v;
+              bestBonus = bonusArr.slice();
+              bestTal = fb;
+              backtrace(rb);
+              bestAb = abBase.slice(); bestLv = lvBase.slice();
+            }
+            bonusArr.fill(0);
+          }
+
+          // 候选羁绊：所有“有未完成档位且有星徽”的羁绊（按缺口从小到大排，先试最可能涨分的）
+          var cand = [], candGap = [];
+          for (var b = 0; b < NB; b++) {
+            if (!anyW[b] || !BADGE[b]) continue;
+            var lv = lvBase[b], cur = n[b] + aha13[b] + abBase[b];
+            var L3 = NEED[b].length;
+            var gap = lv < L3 ? NEED[b][lv] - cur : 99;
+            cand.push(b); candGap.push(gap);
+          }
+          var ord2 = cand.map(function (x, ii) { return ii; });
+          ord2.sort(function (x, y) { return candGap[x] - candGap[y]; });
+          var candS = ord2.map(function (x) { return cand[x]; });
+          var gapS = ord2.map(function (x) { return candGap[x]; });
+          cand = candS; candGap = gapS;
+          var candIn = {};
+          for (var ci3 = 0; ci3 < cand.length; ci3++) candIn[cand[ci3]] = candGap[ci3];
+
+          // 宽松上界：把 3 个天赋点当成免费星徽（用于提前退出）
+          var ubRelax = knap(BUD + extra, null, false);
+
+          var talOpts = [];
+          if (hasYY) {
+            for (var ti = 0; ti < cand.length; ti++)
+              if (YY_TSET[cand[ti]] && candGap[ti] <= 1) talOpts.push(cand[ti]);
+            if (!talOpts.length) talOpts.push(YY_BIDX[0]);
+          } else {
+            talOpts.push(-1);
+          }
+
+          var dmOpts = [];
+          if (dingming) {
+            var seen = {};
+            for (var s = 0; s < sp; s++) {
+              var tp = TYPES[O[stack[s]]];
+              if (seen[tp.id]) continue;
+              seen[tp.id] = 1;
+              var bb = tp.badgeBonds;
+              if (!bb.length) continue;
+              for (var j = 0; j < bb.length; j++) {
+                if (!(bb[j] in candIn)) continue;
+                dmOpts.push({ typeId: tp.id, alloc: [[bb[j], 2]], pr: candIn[bb[j]] });
+                for (var j2 = j + 1; j2 < bb.length; j2++) {
+                  if (!(bb[j2] in candIn)) continue;
+                  dmOpts.push({ typeId: tp.id, alloc: [[bb[j], 1], [bb[j2], 1]],
+                                pr: Math.max(candIn[bb[j]], candIn[bb[j2]]) + 1 });
+                }
+              }
+            }
+            dmOpts.sort(function (x, y) { return x.pr - y.pr; });
+            if (!dmOpts.length) dmOpts.push(null);
+          } else {
+            dmOpts.push(null);
+          }
+
+          var doneFlag = false;
+          for (var a = 0; a < talOpts.length && !doneFlag; a++) {
+            for (var d = 0; d < dmOpts.length; d++) {
+              var dm = dmOpts[d];
+              bonusArr.fill(0);
+              if (talOpts[a] >= 0) bonusArr[talOpts[a]] += 1;
+              var counts = null;
+              if (dm) {
+                for (var q2 = 0; q2 < dm.alloc.length; q2++)
+                  bonusArr[dm.alloc[q2][0]] += dm.alloc[q2][1];
+                counts = {};
+                for (q2 = 0; q2 < dm.alloc.length; q2++)
+                  counts[BOND_KEYS[dm.alloc[q2][0]]] = dm.alloc[q2][1];
+              }
+              var r2 = knap(BUD, bonusArr, false);
+              if (r2.v > bestV) {
+                bestV = r2.v;
+                bestBonus = bonusArr.slice();
+                bestTal = talOpts[a];
+                bonusArr.fill(0);
+                for (q2 = 0; q2 < NB; q2++) bonusArr[q2] = bestBonus[q2];
+                var r3 = knap(BUD, bonusArr, true);
+                backtrace(r3);
+                bestAb = abBase.slice();
+                bestLv = lvBase.slice();
+                bestDmType = dm ? dm.typeId : -1;
+                bestDmCounts = counts;
+                bonusArr.fill(0);
+                if (bestV >= ubRelax.v) { doneFlag = true; break; }   // 已到上界，收工
+              }
+            }
+          }
+          bonusArr.fill(0);
+        }
+
+        considerLeaf(linkSum, bestV, bestAb, bestLv, bestBonus, bestTal, bestDmType, bestDmCounts);
+        return bestV + linkSum + auraV;
+      }
+
+      /* 由「类型下标数组」直接评估（局部搜索用） */
+      function evalSquad(arr, force) {
+        n.fill(0); sp = 0;
+        var ls = 0;
+        for (var q = 0; q < arr.length; q++) {
+          var t = TYPES[O[arr[q]]];
+          stack[sp++] = arr[q];
+          for (var j = 0; j < t.bonds.length; j++) n[t.bonds[j]]++;
+          ls += t.linkN;
+        }
+        return evalLeaf(ls, force === true);
+      }
+
+      /* 迭代局部搜索：1-swap 爬坡 + 随机扰动跳出局部最优 */
+      function iteratedLocalSearch(start, budgetMs) {
+        var tEnd = now() + budgetMs;
+        var cur = start.slice();
+        var curVal = evalSquad(cur, true);
+        var bestS = cur.slice(), bestV = curVal;
+        var tries = 0;
+        while (now() < tEnd) {
+          tries++;
+          var r = localSearch(cur, Math.max(150, budgetMs / 12));
+          if (r.value > bestV) { bestV = r.value; bestS = r.squad.slice(); }
+          // 扰动：随机换 1~2 个位置
+          var cand = (r.value >= curVal ? r.squad : cur).slice();
+          if (Math.random() < 0.35) cand = bestS.slice();
+          var kicks = 1 + (Math.random() < 0.4 ? 1 : 0);
+          var cnt = new Int16Array(NT);
+          for (var i = 0; i < cand.length; i++) cnt[cand[i]]++;
+          for (var k = 0; k < kicks; k++) {
+            var pos = (Math.random() * cand.length) | 0;
+            if (ahaIdx >= 0 && cand[pos] === ahaIdx) continue;
+            var oldT = cand[pos];
+            var nt = (Math.random() * NT) | 0;
+            if (cnt[oldT] > 0) cnt[oldT]--;
+            if (cnt[nt] >= TYPES[O[nt]].avail) { cnt[oldT]++; continue; }
+            cand[pos] = nt; cnt[nt]++;
+          }
+          cur = cand;
+          curVal = evalSquad(cur, true);
+          if (curVal > bestV) { bestV = curVal; bestS = cur.slice(); }
+          if (now() - t0 > timeMs) break;
+        }
+        return { squad: bestS, value: bestV, tries: tries };
+      }
+
+      /* 局部搜索：1-swap 直到无改进 */
+      function localSearch(start, budgetMs) {
+        var cur = start.slice(), curVal = evalSquad(cur, true);
+        var tEnd = now() + budgetMs, improved = true, rounds = 0;
+        while (improved && rounds++ < 40) {
+          improved = false;
+          var cnt = new Int16Array(NT);
+          for (var i = 0; i < cur.length; i++) cnt[cur[i]]++;
+          for (i = 0; i < cur.length; i++) {
+            if (now() > tEnd) return { squad: cur, value: curVal };
+            if (ahaIdx >= 0 && cur[i] === ahaIdx) continue;   // 阿哈固定不动
+            var old = cur[i];
+            cnt[old]--;
+            var bestT = old, bestV = curVal;
+            for (var t2 = 0; t2 < NT; t2++) {
+              if (t2 === old) continue;
+              if (cnt[t2] >= TYPES[O[t2]].avail) continue;
+              cur[i] = t2;
+              var v = evalSquad(cur, true);
+              if (v > bestV) { bestV = v; bestT = t2; }
+            }
+            cur[i] = bestT;
+            cnt[bestT]++;
+            if (bestV > curVal) { curVal = bestV; improved = true; }
+          }
+        }
+        return { squad: cur, value: curVal };
+      }
+
+      /* --- DFS --- */
+      function dfs(tIdx, size, linkSum) {
+        if (size === 13) { evalLeaf(linkSum); return; }
+        if ((++nodes & 511) === 0 && now() - t0 > timeMs) { aborted = true; return; }
+        var r = 13 - size;
+        if (tIdx >= NT || suffixAvail[tIdx] < r) return;
+        if (bound(tIdx, r, linkSum) <= best) return;
+        var t = TYPES[O[tIdx]];
+        if (taken[tIdx] < t.avail) {
+          for (var j = 0; j < t.bonds.length; j++) n[t.bonds[j]]++;
+          taken[tIdx]++; stack[sp++] = tIdx;
+          dfs(tIdx, size + 1, linkSum + t.linkN);
+          sp--; taken[tIdx]--;
+          for (j = 0; j < t.bonds.length; j++) n[t.bonds[j]]--;
+          if (aborted) return;
+        }
+        dfs(tIdx + 1, size, linkSum);
+      }
+
+      /* --- 贪心种子 --- */
+      function seed() {
+        var cnt = new Int16Array(NB), tk = new Int16Array(NT), pick = new Int16Array(13);
+        for (var round = 0; round < 80; round++) {
+          cnt.fill(0); tk.fill(0);
+          var m = 0;
+          if (ahaType >= 0) {
+            for (var q = 0; q < NT; q++) if (O[q] === ahaType) {
+              pick[m++] = q; tk[q]++;
+              TYPES[ahaType].bonds.forEach(function (b) { cnt[b]++; });
+              break;
+            }
+          }
+          while (m < 13) {
+            var bt = -1, bv = -1e9;
+            for (q = 0; q < NT; q++) {
+              var t = TYPES[O[q]];
+              if (tk[q] >= t.avail) continue;
+              var v = t.linkN * 0.4;
+              for (var j = 0; j < t.bonds.length; j++) {
+                var b = t.bonds[j], L = NEED[b].length;
+                for (var k = 0; k < L; k++) {
+                  if (!w[b * 4 + k]) continue;
+                  var gap = NEED[b][k] - (cnt[b] + 1);
+                  v += gap <= 0 ? 4 : w[b * 4 + k] / (gap + 1);
+                }
+              }
+              v += Math.random() * (round ? 3 : 0);
+              if (v > bv) { bv = v; bt = q; }
+            }
+            if (bt < 0) break;
+            pick[m++] = bt; tk[bt]++;
+            TYPES[O[bt]].bonds.forEach(function (b) { cnt[b]++; });
+          }
+          if (m < 13) continue;
+          n.fill(0); sp = 0;
+          var ls = 0;
+          for (q = 0; q < 13; q++) {
+            var ty = TYPES[O[pick[q]]];
+            stack[sp++] = pick[q];
+            ty.bonds.forEach(function (b) { n[b]++; });
+            ls += ty.linkN;
+          }
+          evalLeaf(ls);
+          sp = 0; n.fill(0);
+        }
+      }
+
+      /* --- 主流程 --- */
+      var tS = now();
+      seed();
+      var seedMs = Math.round(now() - tS);
+
+      // 局部搜索打磨种子解（阿哈必上场，不参与替换）
+      var ahaIdx = -1;
+      for (i = 0; i < NT; i++) if (O[i] === ahaType) { ahaIdx = i; break; }
+      if (bestState) {
+        var tL = now();
+        var startArr = bestState.stack.slice();
+        var ilsRes = iteratedLocalSearch(startArr, Math.max(800, Math.min(4000, timeMs * 0.45)));
+        var lsMs = Math.round(now() - tL);
+      }
+
+      n.fill(0); sp = 0; taken.fill(0);
+      if (ahaType >= 0) {
+        var ai = -1;
+        for (i = 0; i < NT; i++) if (O[i] === ahaType) { ai = i; break; }
+        if (ai >= 0) {
+          var at = TYPES[O[ai]];
+          at.bonds.forEach(function (b) { n[b]++; });
+          taken[ai]++; stack[sp++] = ai;
+          dfs(0, 1, at.linkN);
+          sp--; taken[ai]--;
+          at.bonds.forEach(function (b) { n[b]--; });
+        }
+      } else {
+        dfs(0, 0, 0);
+      }
+
+      var res = {
+        status: aborted ? "FEASIBLE" : "OPTIMAL", optimal: !aborted,
+        score: best, nodes: nodes, leaves: leaves, knaps: knaps,
+        ms: Math.round(now() - t0), seedMs: seedMs,
+        squad: [], squadIdx: [], badges: {}, counts: {}, reached: {},
+        newTiers: 0, linkSum: 0, dm: null, yy: null, auraBonds: [], mustFail: [],
+        useAha: useAha, useYY: yyOn
+      };
+      if (!bestState) { res.status = "INFEASIBLE"; res.score = 0; return res; }
+
+      /* ---------- 解提取 ---------- */
+      var st = bestState;
+      var nn = st.n;
+      var used = {}, members = [], ahaDone = false, yyDone = false;
+      for (var s = 0; s < st.stack.length; s++) {
+        var t = TYPES[O[st.stack[s]]];
+        var chosen = -1;
+        if (ahaType >= 0 && t.id === ahaType && !ahaDone) { chosen = AHA_I; ahaDone = true; }
+        else if (yyType >= 0 && t.id === yyType && !yyDone && YY_I >= 0) { chosen = YY_I; yyDone = true; }
+        else {
+          for (var q4 = 0; q4 < t.members.length; q4++) {
+            var ci = t.members[q4];
+            if (used[ci]) continue;
+            if (ahaType >= 0 && ci === AHA_I) continue;
+            if (yyType >= 0 && ci === YY_I) continue;
+            chosen = ci; break;
+          }
+        }
+        if (chosen < 0) { res.status = "EXTRACT_FAIL"; return res; }
+        used[chosen] = 1;
+        members.push({ ci: chosen, typeId: t.id });
+      }
+
+      /* 星徽 → 成员：最大流匹配 */
+      var ab = st.ab;
+      var flow = assignBadges(members, ab);
+      if (!flow) { res.status = "ALLOC_FAIL"; res.score = best; }
+
+      var bonus = st.bonus, cntOut = {}, reachedOut = {}, newT = 0;
+      for (var b3 = 0; b3 < NB; b3++) {
+        var bon = bonus ? bonus[b3] : 0;
+        var real = nn[b3] + ab[b3] + bon;
+        cntOut[BOND_KEYS[b3]] = (useAha && AHA_BSET[b3]) ? 99 : real;
+        var L4 = NEED[b3].length, rt = 0;
+        for (var k3 = 0; k3 < L4; k3++) if (cntOut[BOND_KEYS[b3]] >= NEED[b3][k3]) rt = k3 + 1;
+        reachedOut[BOND_KEYS[b3]] = rt;
+        for (k3 = 0; k3 < L4; k3++) {
+          if (k3 < rt && !done.has(BOND_KEYS[b3] + "|" + k3)) newT++;
+          if (k3 >= rt && !done.has(BOND_KEYS[b3] + "|" + k3) &&
+              must.has(BOND_KEYS[b3]) && !soft) res.mustFail.push(BOND_KEYS[b3]);
+        }
+      }
+      var auraBonds = [];
+      for (var b4 = 0; b4 < NB; b4++) {
+        var rr = nn[b4] + ab[b4] + (bonus ? bonus[b4] : 0);
+        if (rr >= 5) auraBonds.push(BOND_KEYS[b4]);
+      }
+
+      var badgesOut = {};
+      members.forEach(function (mem) { badgesOut[CHARS[mem.ci].n] = mem.badges || []; });
+
+      var dmOut = null, yyOut = null;
+      if (st.dm) {
+        for (var mi = 0; mi < members.length; mi++)
+          if (members[mi].typeId === st.dm.typeId) {
+            dmOut = { name: CHARS[members[mi].ci].n, counts: st.dm.counts };
+            break;
+          }
+      }
+      if (st.tal >= 0) yyOut = { name: DATA.yyName, bond: BOND_KEYS[st.tal] };
+
+      res.squad = members.map(function (mem) { return CHARS[mem.ci].n; });
+      res.squadIdx = members.map(function (mem) { return mem.ci; });
+      res.badges = badgesOut;
+      res.counts = cntOut;
+      res.reached = reachedOut;
+      res.newTiers = newT;
+      res.linkSum = st.linkSum;
+      res.dm = dmOut;
+      res.yy = yyOut;
+      res.auraBonds = auraBonds;
+      return res;
+    }
+
+    /* 最大流：羁绊 → 成员（非原生、每人 ≤3 枚） */
+    function assignBadges(members, ab) {
+      var M = members.length;
+      var bondList = [];
+      for (var b = 0; b < NB; b++) if (ab[b] > 0) bondList.push(b);
+      var total = 0;
+      bondList.forEach(function (b) { total += ab[b]; });
+      if (total === 0) { members.forEach(function (m) { m.badges = []; }); return true; }
+      if (total > M * 3) return false;
+
+      // 节点：0 = 源，1..B = 羁绊，B+1..B+M = 成员，B+M+1 = 汇
+      var B = bondList.length, S = 0, T = B + M + 1, N = B + M + 2;
+      var cap = new Int16Array(N * N);
+      var orig = new Int16Array(N * N);
+      var bIndex = {};
+      bondList.forEach(function (b, i2) { bIndex[b] = i2; });
+      bondList.forEach(function (b, i2) {
+        cap[S * N + (1 + i2)] = ab[b];
+        orig[S * N + (1 + i2)] = ab[b];
+        for (var mi = 0; mi < M; mi++) {
+          if (CB[members[mi].ci].indexOf(b) >= 0) continue;   // 原生不能再戴
+          cap[(1 + i2) * N + (1 + B + mi)] = 1;
+          orig[(1 + i2) * N + (1 + B + mi)] = 1;
+        }
+      });
+      for (var mi2 = 0; mi2 < M; mi2++) {
+        cap[(1 + B + mi2) * N + T] = 3;
+        orig[(1 + B + mi2) * N + T] = 3;
+      }
+
+      // Edmonds-Karp
+      var flow = 0;
+      while (true) {
+        var prev = new Int16Array(N).fill(-1);
+        var q = [S], qi = 0;
+        prev[S] = S;
+        while (qi < q.length && prev[T] < 0) {
+          var u = q[qi++];
+          for (var v = 0; v < N; v++) {
+            if (prev[v] >= 0 || cap[u * N + v] <= 0) continue;
+            prev[v] = u; q.push(v);
+            if (v === T) break;
+          }
+        }
+        if (prev[T] < 0) break;
+        // 找最小剩余容量并增广
+        var f = 1e9, cur = T;
+        while (cur !== S) { var p = prev[cur]; f = Math.min(f, cap[p * N + cur]); cur = p; }
+        cur = T;
+        while (cur !== S) { p = prev[cur]; cap[p * N + cur] -= f; cap[cur * N + p] += f; cur = p; }
+        flow += f;
+      }
+      if (flow < total) return false;
+
+      // 从流量反推分配
+      members.forEach(function (m) { m.badges = []; });
+      bondList.forEach(function (b, i2) {
+        for (var mi3 = 0; mi3 < M; mi3++) {
+          var e = (1 + i2) * N + (1 + B + mi3);
+          if (orig[e] === 1 && cap[e] === 0) {          // 该边走满 → 这枚星徽归这个成员
+            members[mi3].badges.push(BOND_KEYS[b]);
+          }
+        }
+      });
+      return true;
+    }
+
+    return { solve: solve, BOND_KEYS: BOND_KEYS, NEED: NEED, BADGE: BADGE, CHARS: CHARS, CB: CB };
+  }
+
+  return { createSolver: createSolver };
+});
+
+</script>
+<script>
+(function () {
+  "use strict";
+  var solver = ExactSolver.createSolver(DATA);
+  var BONDS = DATA.bonds, KEYS = Object.keys(BONDS);
+  var done = new Set(), must = new Set();
+  var STORE = "cw_s2_opt_v1";
+
+  function tierCount(b) { return BONDS[b].need.length; }
+  function totalTiers() { var n = 0; KEYS.forEach(function (b) { n += tierCount(b); }); return n; }
+
+  /* --- 渲染进度卡 --- */
+  var listEl = document.getElementById("bondList");
+  function renderBonds() {
+    listEl.innerHTML = "";
+    KEYS.forEach(function (b) {
+      var d = document.createElement("div");
+      d.className = "bond" + (BONDS[b].badge ? "" : " norev");
+      var badge = BONDS[b].badge
+        ? '<span class="badge-yes">可星徽</span>'
+        : '<span class="badge-no">无星徽</span>';
+      var tiers = "";
+      BONDS[b].need.forEach(function (need, k) {
+        var on = done.has(b + "|" + k);
+        tiers += '<span class="tier' + (on ? " on" : "") + '" data-b="' + b + '" data-k="' + k + '">'
+               + "第" + (k + 1) + "档 " + need + "人</span>";
+      });
+      d.innerHTML = '<div class="bn">' + b + badge + "</div><div class=\"tiers\">" + tiers + "</div>";
+      listEl.appendChild(d);
+      if (done.size) d.classList.toggle("on", BONDS[b].need.every(function (_, k) { return done.has(b + "|" + k); }));
+    });
+    document.getElementById("progTxt").textContent = done.size + " / " + totalTiers() + " 档";
+  }
+  listEl.addEventListener("click", function (e) {
+    var t = e.target.closest(".tier");
+    if (!t) return;
+    var key = t.dataset.b + "|" + t.dataset.k;
+    if (done.has(key)) done.delete(key); else done.add(key);
+    renderBonds(); renderMust(); save();
+  });
+  document.getElementById("btnNone").onclick = function () { done.clear(); renderBonds(); renderMust(); save(); };
+  document.getElementById("btnAll").onclick = function () {
+    KEYS.forEach(function (b) { BONDS[b].need.forEach(function (_, k) { done.add(b + "|" + k); }); });
+    renderBonds(); renderMust(); save();
+  };
+
+  /* --- 模式 2 的羁绊选择 --- */
+  function bondFull(b) { return BONDS[b].need.every(function (_, k) { return done.has(b + "|" + k); }); }
+  function renderMust() {
+    var box = document.getElementById("mustList");
+    var avail = KEYS.filter(function (b) { return !bondFull(b); });
+    box.innerHTML = "";
+    avail.forEach(function (b) {
+      var l = document.createElement("label");
+      l.className = must.has(b) ? "on" : "";
+      l.textContent = b;
+      l.onclick = function () {
+        if (must.has(b)) must.delete(b); else must.add(b);
+        renderMust(); save();
+      };
+      box.appendChild(l);
+    });
+    if (!avail.length) box.innerHTML = '<span class="mini">所有羁绊都已完成</span>';
+  }
+  document.getElementById("selMode").onchange = function () {
+    document.getElementById("mustWrap").style.display = this.value === "2" ? "block" : "none";
+  };
+
+  /* --- 存取 --- */
+  function save() {
+    try {
+      localStorage.setItem(STORE, JSON.stringify({
+        done: Array.from(done), must: Array.from(must),
+        aha: document.getElementById("selAha").value,
+        dm: document.getElementById("cbDm").checked,
+        mode: document.getElementById("selMode").value
+      }));
+    } catch (e) {}
+  }
+  function load() {
+    try {
+      var s = JSON.parse(localStorage.getItem(STORE) || "null");
+      if (!s) return;
+      (s.done || []).forEach(function (k) { done.add(k); });
+      (s.must || []).forEach(function (k) { must.add(k); });
+      document.getElementById("selAha").value = s.aha || "1";
+      document.getElementById("cbDm").checked = s.dm !== false;
+      document.getElementById("selMode").value = s.mode || "1";
+      document.getElementById("mustWrap").style.display = (s.mode === "2") ? "block" : "none";
+    } catch (e) {}
+  }
+  ["selAha", "cbDm", "selMode"].forEach(function (id) {
+    document.getElementById(id).addEventListener("change", save);
+  });
+
+  /* --- 求解 --- */
+  var FRONT = 4;
+  function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]; }); }
+
+  function renderResult(r, doneSet) {
+    var st = document.getElementById("stStatus");
+    if (r.status === "INFEASIBLE") {
+      st.className = "status warnb"; st.textContent = "无解";
+      document.getElementById("squadBox").innerHTML = '<div class="empty">这组条件下找不到可行阵容（模式 2 的羁绊无法同时完成）</div>';
+      return;
+    }
+    var opt = r.optimal;
+    st.className = "status " + (opt ? "ok" : "warnb");
+    st.textContent = opt ? "已证明最优" : "限时内最优解";
+
+    document.getElementById("kNew").textContent = r.newTiers;
+    document.getElementById("kStar").textContent = "+" + (r.newTiers * 20);
+    document.getElementById("kTotal").textContent = (doneSet.size + r.newTiers) + " / " + totalTiers();
+    document.getElementById("kLink").textContent = (r.linkSum / Math.max(1, r.squad.length)).toFixed(1);
+
+    // 阵容表
+    var idx = {};
+    DATA.chars.forEach(function (c, i) { idx[c.n] = i; });
+    var byName = {};
+    DATA.chars.forEach(function (c) { byName[c.n] = c; });
+    var members = r.squad.map(function (n) { return byName[n]; });
+    var yyName = DATA.yyName;
+    var front = [], back = [];
+    members.forEach(function (c) {
+      if (c.n === yyName) return;
+      if (c.p.indexOf("前") === 0 && front.length < FRONT - (members.some(function (m) { return m.n === yyName; }) ? 1 : 0)) front.push(c);
+      else back.push(c);
+    });
+    var yyM = members.filter(function (c) { return c.n === yyName; })[0];
+    if (yyM) front.push(yyM);           // 饮月：前台最后一位
+    while (front.length < FRONT && back.length) front.push(back.shift());
+
+    var h = '<table><tr><th style="width:64px">位置</th><th>角色</th><th style="width:56px">费用</th><th>原生羁绊</th><th>星徽</th></tr>';
+    front.forEach(function (c, i) { h += row(c, "前台 " + (i + 1), "front"); });
+    back.forEach(function (c, i) { h += row(c, "后台 " + (i + 1), "back"); });
+    h += "</table>";
+    function row(c, pos, cls) {
+      var bd = (r.badges[c.n] || []).join("、") || "—";
+      var native = c.b.join("、") || "—";
+      if (r.yy && c.n === r.yy.name) native += "（天赋：" + r.yy.bond + "）";
+      return "<tr><td class='" + cls + "'>" + pos + "</td><td><b>" + esc(c.n) + "</b></td><td>"
+        + c.c + " 费</td><td>" + esc(native) + "</td><td class='bd'>" + esc(bd) + "</td></tr>";
+    }
+    document.getElementById("squadBox").innerHTML = h;
+
+    // 说明
+    var notes = "";
+    if (r.dm) {
+      var parts = Object.keys(r.dm.counts).map(function (b) { return b + " +" + r.dm.counts[b]; }).join("、");
+      notes += '<div class="note"><b>命定主角</b> 挂给 ' + esc(r.dm.name) + "：" + esc(parts) + "，共 +2 点计数（已计入人数判定）</div>";
+    } else if (document.getElementById("cbDm").checked) {
+      notes += '<div class="note">本局没有比它更划算的「命定主角」用法，可不挂。</div>';
+    }
+    var yyIn = r.squad.indexOf(DATA.yyName) >= 0;
+    if (yyIn && r.yy) {
+      notes += '<div class="note"><b>饮月天赋 · 生效</b>：把丹恒·饮月放在<b>前台</b>、并且<b>最后放置</b>，'
+             + "天赋会给他加「" + esc(r.yy.bond) + "」(+1 计数)，上面阵容已按生效计算。</div>";
+    } else {
+      notes += '<div class="note">本局阵容里<b>没有饮月</b>，天赋不生效（不占位置、也不影响结果）。</div>';
+    }
+    if (r.useAha) notes += '<div class="note">阿哈已上场：欢愉 / 幻月游戏按满级计（不占星徽槽）。</div>';
+    document.getElementById("noteBox").innerHTML = notes;
+
+    // 新完成
+    var nb = "";
+    KEYS.forEach(function (b) {
+      BONDS[b].need.forEach(function (need, k) {
+        if (k < (r.reached[b] || 0) && !doneSet.has(b + "|" + k))
+          nb += "<tr><td>" + b + "</td><td>" + (BONDS[b].badge ? "可星徽" : "无星徽") + "</td><td>第 "
+             + (k + 1) + " 档</td><td>" + need + " 人</td><td>" + (r.counts[b] >= 90 ? "满级" : r.counts[b])
+             + "</td><td class='bd'>+20 星琼</td></tr>";
+      });
+    });
+    document.getElementById("newBox").innerHTML = nb
+      ? "<table><tr><th>羁绊</th><th>星徽</th><th>档位</th><th>要求</th><th>本局人数</th><th>奖励</th></tr>" + nb + "</table>"
+      : '<div class="empty">本局没有新增档位</div>';
+
+    // 未达成
+    var ms = "";
+    KEYS.forEach(function (b) {
+      BONDS[b].need.forEach(function (need, k) {
+        if (doneSet.has(b + "|" + k)) return;
+        var cur = Math.min(r.counts[b], 99);
+        if (cur < need) ms += "<tr><td>" + b + "</td><td>第 " + (k + 1) + " 档</td><td>" + need
+          + " 人</td><td>" + cur + "</td><td style='color:#ff9a9a'>差 " + (need - cur) + "</td></tr>";
+      });
+    });
+    document.getElementById("missBox").innerHTML = ms
+      ? "<table><tr><th>羁绊</th><th>档位</th><th>要求</th><th>本局人数</th><th>差</th></tr>" + ms + "</table>"
+      : '<div class="empty">全部档位都已达成</div>';
+  }
+
+  document.getElementById("btnRun").onclick = function () {
+    var useAha = document.getElementById("selAha").value === "1";
+    var mustSet = new Set(document.getElementById("selMode").value === "2" ? Array.from(must) : []);
+    if (document.getElementById("selMode").value === "2" && !mustSet.size) {
+      alert("模式 2 需要至少勾一个「不想再单独打」的羁绊。");
+      return;
+    }
+    if (done.size >= totalTiers() && !mustSet.size) {
+      alert("全部 " + totalTiers() + " 档都已勾选，没有需要优化的目标了。");
+      return;
+    }
+    var btn = this;
+    btn.disabled = true;
+    document.getElementById("overlay").classList.add("on");
+    document.getElementById("ovtxt").textContent = "正在求解…（精确搜索，最多约 8 秒）";
+
+    setTimeout(function () {
+      var t0 = Date.now();
+      var doneSet = new Set(done);
+      var r;
+      try {
+        r = solver.solve({
+          done: doneSet, useAha: useAha, must: mustSet, soft: false,
+          auraHard: false, dingming: document.getElementById("cbDm").checked,
+          yyTalent: true, timeLimitMs: 8000
+        });
+        if (r.status === "INFEASIBLE" && mustSet.size) {
+          r = solver.solve({
+            done: doneSet, useAha: useAha, must: mustSet, soft: true,
+            auraHard: false, dingming: document.getElementById("cbDm").checked,
+            yyTalent: true, timeLimitMs: 4000
+          });
+          r.soft = true;
+        }
+        renderResult(r, doneSet);
+        document.getElementById("runHint").textContent =
+          "用时 " + ((Date.now() - t0) / 1000).toFixed(1) + " 秒 · 搜索节点 " + r.nodes;
+      } catch (e) {
+        document.getElementById("squadBox").innerHTML =
+          '<div class="empty">求解出错：' + esc(e.message) + "</div>";
+      }
+      document.getElementById("overlay").classList.remove("on");
+      btn.disabled = false;
+    }, 60);
+  };
+
+  load();
+  renderBonds();
+  renderMust();
+})();
+</script>
+</body>
+</html>
