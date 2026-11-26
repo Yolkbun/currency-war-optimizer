@@ -4,9 +4,8 @@
 
 ## 在线使用
 
-**https://yolkbun.me/currency-war-optimizer/**
+**https://cwopt.yolkbun.me**
 
-（备用地址：https://yolkbun.github.io/currency-war-optimizer/）
 
 打开即用，纯前端运行，不联网计算、不上传任何数据。
 
